@@ -1,0 +1,45 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  REGISTRY: "registry.gitlab.com/#PATH_TO_REPOSITORY#"
+
+before_script:
+  - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+
+app_build:
+  stage: build
+  tags:
+    - #BUILD_TAG#
+  only:
+    - master
+    - tags
+  script:
+    - docker build --build-arg NODE_ENV="dev" -t "$REGISTRY/dev/app:$CI_COMMIT_REF_NAME" -f ./docker/gitlab/app/Dockerfile .
+    - docker push "$REGISTRY/dev/app:$CI_COMMIT_REF_NAME"
+
+prod_deploy:
+  stage: deploy
+  tags:
+    - #PROD_TAG#
+  only:
+    - tags
+  when: manual
+  script:
+    - cd ../ && cp -r #PROJECT_NAME# /var/docker/#PATH_TO_PROJECT#/ && cd #PROJECT_NAME#
+    - chown -R www-data:www-data /var/docker/#PATH_TO_PROJECT#/#PROJECT_NAME#
+    - export CONTAINER_PREFIX=#YOUR_PREFIX#
+    - docker stop $(docker ps -a | grep ${CONTAINER_PREFIX}_ | awk '{print $1}') || true
+    - docker rm $(docker ps -a | grep ${CONTAINER_PREFIX}_ | awk '{print $1}') || true
+    - docker volume rm $(docker volume ls | grep ${CONTAINER_PREFIX}_ | awk '{print $2}') || true
+    - docker-compose -p $CONTAINER_PREFIX -f docker-compose.prod.yml up -d
+    - docker exec ${CONTAINER_PREFIX}_app composer update
+    - docker exec ${CONTAINER_PREFIX}_app composer install
+    - docker exec ${CONTAINER_PREFIX}_app php artisan migrate --force
+    - docker exec ${CONTAINER_PREFIX}_app php artisan db:seed --force
+    - docker exec ${CONTAINER_PREFIX}_app php artisan cache:clear
+    - docker exec ${CONTAINER_PREFIX}_app php artisan config:cache
+    - docker exec ${CONTAINER_PREFIX}_app php artisan route:cache
+    - docker exec ${CONTAINER_PREFIX}_app npm install
+    - docker exec ${CONTAINER_PREFIX}_app npm run build

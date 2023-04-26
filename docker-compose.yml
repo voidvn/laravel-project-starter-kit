@@ -1,0 +1,54 @@
+version: '3.2'
+
+services:
+    nginx:
+        image: nginx:latest
+        volumes:
+            - ./:/var/www/
+            - ./docker/nginx/conf.d/:/etc/nginx/conf.d
+        ports:
+            - "7777:80"
+        depends_on:
+            - app
+        container_name: #CONTAINER_NAME#
+
+    app:
+        build:
+            context: .
+            dockerfile: docker/app/Dockerfile
+        volumes:
+            - ./:/var/www/
+        depends_on:
+            - db
+        container_name: #CONTAINER_NAME#
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        environment:
+            - PHP_IDE_CONFIG=serverName=#THIS_CONTAINER_NAME#
+            - XDEBUG_SESSION=PHPSTORM
+
+    db:
+        image: mysql:8.0
+        restart: always
+        volumes:
+            - ./tmp/db:/var/lib/mysql
+        environment:
+            MYSQL_DATABASE: laravel-project
+            MYSQL_ROOT_PASSWORD: root
+        ports:
+            - "7776:3306"
+        command: mysqld --character-set-server=utf8 --collation-server=utf8_unicode_ci
+        container_name: #CONTAINER_NAME#
+
+    supervisor:
+        container_name: #CONTAINER_NAME#
+        build:
+            context: .
+            dockerfile: docker/app/supervisor/supervisor.dockerfile
+        volumes:
+            - ./:/var/www/
+            - ./docker/app/supervisor/conf.d/:/etc/supervisor/conf.d/
+        working_dir: /var/www
+        restart: always
+        depends_on:
+            - app

@@ -1,0 +1,74 @@
+version: '3.2'
+
+services:
+  app:
+    container_name: #CONTAINER_NAME#
+    image: $REGISTRY/dev/app:$CI_COMMIT_TAG
+    environment:
+      - APP_KEY=$APP_KEY
+      - APP_NAME=$APP_NAME
+      - APP_ENV=$APP_ENV
+      - APP_URL=$APP_URL
+      - DB_CONNECTION=$DB_CONNECTION
+      - DB_HOST=$DB_HOST
+      - DB_PORT=$DB_PORT
+      - DB_DATABASE=$DB_DATABASE
+      - DB_USERNAME=$DB_USERNAME
+      - DB_PASSWORD=$DB_PASSWORD
+      - APP_DEBUG=$APP_DEBUG
+      - QUEUE_CONNECTION=$QUEUE_CONNECTION
+    volumes:
+      - /var/docker/#PATH_TO_PROJECT#/#PROJECT_NAME#:/var/www
+      - /var/docker/#PATH_TO_PROJECT#/storage:/app/storage
+    working_dir: /var/www
+    depends_on:
+      - db
+
+  web:
+    image: nginx:latest
+    volumes:
+      - /var/docker/#PATH_TO_PROJECT#/#PROJECT_NAME#:/var/www
+      - /var/docker/#PATH_TO_PROJECT#/storage:/app/storage
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d
+    ports:
+      - "8181:80"
+    depends_on:
+      - app
+    container_name: #CONTAINER_NAME#
+
+  db:
+    image: mysql:8.0
+    restart: always
+    volumes:
+      - /var/docker/#PATH_TO_PROJECT#/db:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE: $DB_DATABASE
+      MYSQL_ROOT_PASSWORD: $DB_PASSWORD
+    ports:
+      - "7776:3306"
+    command: mysqld --character-set-server=utf8 --collation-server=utf8_unicode_ci
+    container_name: #CONTAINER_NAME#
+
+  scheduler:
+    container_name: #CONTAINER_NAME#
+    build:
+      context: .
+      dockerfile: docker/app/cron/scheduler.dockerfile
+    volumes:
+      - .:/var/www
+    working_dir: /var/www
+    restart: always
+
+  supervisor:
+    container_name: #CONTAINER_NAME#
+    build:
+      context: .
+      dockerfile: docker/app/supervisor/supervisor.dockerfile
+    volumes:
+      - ./docker/app/supervisor/conf.d/:/etc/supervisor/conf.d/
+      - /var/docker/#PATH_TO_PROJECT#/#PROJECT_NAME#:/var/www
+      - /var/docker/#PATH_TO_PROJECT#/storage:/app/storage
+    working_dir: /var/www
+    restart: always
+    depends_on:
+      - app
